@@ -195,8 +195,11 @@ chmod +x /opt/etc/ndm/netfilter.d/100-xray.sh
 ( crontab -l 2>/dev/null | grep -v update-domains; echo "0 5 * * * $XDIR/update-domains.sh >> /opt/var/log/vpn-update.log 2>&1" ) | crontab - 2>/dev/null
 
 echo "==> [8/8] Запуск"
+# Восстанавливаем службы, если ранее были отключены (например, прошлым uninstall).
+[ -f /opt/etc/init.d/S24xray.off ] && mv -f /opt/etc/init.d/S24xray.off /opt/etc/init.d/S24xray
+sed -i 's/^ENABLED=.*/ENABLED=yes/' /opt/etc/init.d/S56dnsmasq 2>/dev/null
 /opt/etc/init.d/S24xray restart >/dev/null 2>&1; sleep 2
-/opt/etc/init.d/S56dnsmasq start  >/dev/null 2>&1; sleep 1
+/opt/etc/init.d/S56dnsmasq restart >/dev/null 2>&1; sleep 1
 /opt/etc/init.d/S10cron start     >/dev/null 2>&1 || true
 sh "$XDIR/fw.sh" start >/dev/null 2>&1
 sh "$XDIR/update-domains.sh" || true
