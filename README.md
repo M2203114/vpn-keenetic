@@ -26,10 +26,11 @@ curl -fsSL https://raw.githubusercontent.com/M2203114/vpn-keenetic/main/install.
 SUB_URL="https://ваша-подписка/sub/xxxx" sh /tmp/install.sh
 ```
 
-Выбрать страну выхода (подстрока в имени сервера из подписки, по умолчанию `nl`):
+Установщик сам перебирает серверы из подписки, проверяет выход и берёт первый рабочий. Управление выбором:
 
 ```sh
-SUB_URL="https://..." EXIT=de sh /tmp/install.sh
+SUB_URL="https://..." EXIT=de sh /tmp/install.sh          # страна выхода (по умолчанию nl)
+SUB_URL="https://..." SERVER=nl01s2 sh /tmp/install.sh    # конкретный сервер
 ```
 
 Альтернатива (без скачивания): скопируйте `install.sh` любым способом (scp, вставка через `cat > install.sh`) и запустите `SUB_URL="..." sh install.sh`.

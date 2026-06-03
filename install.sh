@@ -5,7 +5,9 @@
 #
 # Использование:
 #   SUB_URL="https://ваша-подписка" sh install.sh
-#   SUB_URL="https://..." EXIT=de sh install.sh      # выбрать страну выхода (подстрока в имени сервера)
+#   SUB_URL="https://..." EXIT=de sh install.sh          # страна выхода (подстрока в имени сервера)
+#   SUB_URL="https://..." SERVER=nl01s2 sh install.sh    # конкретный сервер
+# Установщик сам проверяет серверы-кандидаты и берёт первый рабочий.
 #
 # Требования: роутер Keenetic с установленным Entware (opkg), доступ root по SSH.
 
@@ -38,28 +40,53 @@ LANS=$(echo $LANS | xargs)
 [ -z "$LANS" ] && { echo "ОШИБКА: не найдено ни одного LAN-моста (br*) с приватным IP"; exit 1; }
 echo "    сегменты: $LANS   dnsmasq слушает: $LAN_LISTEN"
 
-echo "==> [3/8] Разбор подписки (страна выхода: $EXIT)"
+echo "==> [3/8] Подписка: выбор рабочего сервера (фильтр: ${SERVER:-$EXIT})"
 curl -s --max-time 40 "$SUB_URL" -o /tmp/sub.raw
 base64 -d /tmp/sub.raw 2>/dev/null > /tmp/sub.txt || true
 grep -q '^vless://' /tmp/sub.txt 2>/dev/null || cp /tmp/sub.raw /tmp/sub.txt
-LINE=$(grep -i "vless://[^#]*$EXIT" /tmp/sub.txt | head -1)
-[ -z "$LINE" ] && LINE=$(grep '^vless://' /tmp/sub.txt | head -1)
-[ -z "$LINE" ] && { echo "ОШИБКА: в подписке не найдено vless-серверов"; exit 1; }
-LINE=${LINE%%#*}
-HOST=$(echo "$LINE" | sed -n 's#vless://[^@]*@\([^:]*\):.*#\1#p')
-PORT=$(echo "$LINE" | sed -n 's#vless://[^@]*@[^:]*:\([0-9]*\).*#\1#p')
-UUID=$(echo "$LINE" | sed -n 's#vless://\([^@]*\)@.*#\1#p')
-PBK=$(echo "$LINE"  | sed -n 's#.*[?&]pbk=\([^&]*\).*#\1#p')
-SID=$(echo "$LINE"  | sed -n 's#.*[?&]sid=\([^&]*\).*#\1#p')
-SNI=$(echo "$LINE"  | sed -n 's#.*[?&]sni=\([^&]*\).*#\1#p')
-FLOW=$(echo "$LINE" | sed -n 's#.*[?&]flow=\([^&]*\).*#\1#p')
-[ -z "$PORT" ] && PORT=443
-[ -z "$FLOW" ] && FLOW=xtls-rprx-vision
-[ -z "$SNI" ] && SNI=www.google.com
-if [ -z "$UUID" ] || [ -z "$HOST" ] || [ -z "$PBK" ]; then
-    echo "ОШИБКА: не удалось разобрать сервер (нужны uuid/host/pbk). Строка: $HOST"; exit 1
-fi
-echo "    сервер: $HOST:$PORT  sni=$SNI"
+# Кандидаты: сначала под фильтр (SERVER, иначе EXIT), затем остальные; без дублей.
+FILTER="${SERVER:-$EXIT}"
+{ grep -i "vless://[^#]*$FILTER" /tmp/sub.txt; grep '^vless://' /tmp/sub.txt; } | awk '!seen[$0]++' > /tmp/cands.txt
+[ -s /tmp/cands.txt ] || { echo "ОШИБКА: в подписке не найдено vless-серверов"; exit 1; }
+
+parse_one() {   # $1 = vless-ссылка -> HOST PORT UUID PBK SID SNI FLOW
+    L=${1%%#*}
+    HOST=$(echo "$L" | sed -n 's#vless://[^@]*@\([^:]*\):.*#\1#p')
+    PORT=$(echo "$L" | sed -n 's#vless://[^@]*@[^:]*:\([0-9]*\).*#\1#p')
+    UUID=$(echo "$L" | sed -n 's#vless://\([^@]*\)@.*#\1#p')
+    PBK=$(echo "$L"  | sed -n 's#.*[?&]pbk=\([^&]*\).*#\1#p')
+    SID=$(echo "$L"  | sed -n 's#.*[?&]sid=\([^&]*\).*#\1#p')
+    SNI=$(echo "$L"  | sed -n 's#.*[?&]sni=\([^&]*\).*#\1#p')
+    FLOW=$(echo "$L" | sed -n 's#.*[?&]flow=\([^&]*\).*#\1#p')
+    [ -z "$PORT" ] && PORT=443; [ -z "$FLOW" ] && FLOW=xtls-rprx-vision; [ -z "$SNI" ] && SNI=www.google.com
+}
+test_server() {   # поднимает временный xray на :10899 и проверяет выход
+    cat > /tmp/_test.json <<T
+{ "log":{"loglevel":"none"},
+  "inbounds":[{"listen":"127.0.0.1","port":10899,"protocol":"socks","settings":{"udp":false}}],
+  "outbounds":[{"protocol":"vless","settings":{"vnext":[{"address":"$HOST","port":$PORT,"users":[{"id":"$UUID","encryption":"none","flow":"$FLOW"}]}]},"streamSettings":{"network":"tcp","security":"reality","realitySettings":{"serverName":"$SNI","fingerprint":"chrome","publicKey":"$PBK","shortId":"$SID"}}}]
+}
+T
+    /opt/sbin/xray run -c /tmp/_test.json >/dev/null 2>&1 &
+    tpid=$!; sleep 2
+    code=$(curl -s --max-time 8 --socks5-hostname 127.0.0.1:10899 -o /dev/null -w '%{http_code}' https://www.gstatic.com/generate_204 2>/dev/null)
+    kill $tpid 2>/dev/null; wait $tpid 2>/dev/null
+    [ "$code" = "204" ]
+}
+
+SEL=""; i=0
+while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    i=$((i+1)); [ $i -gt 12 ] && break
+    parse_one "$line"
+    { [ -z "$UUID" ] || [ -z "$HOST" ] || [ -z "$PBK" ]; } && continue
+    printf "    проверяю %s ... " "$HOST"
+    if test_server; then echo "OK"; SEL="$line"; break; else echo "нет"; fi
+done < /tmp/cands.txt
+if [ -z "$SEL" ]; then echo "    рабочий не найден ($i проверено), беру первый"; SEL=$(head -1 /tmp/cands.txt); fi
+parse_one "$SEL"
+if [ -z "$UUID" ] || [ -z "$HOST" ] || [ -z "$PBK" ]; then echo "ОШИБКА: не удалось разобрать сервер"; exit 1; fi
+echo "    выбран: $HOST:$PORT  sni=$SNI"
 
 echo "==> [4/8] Конфиг xray ($XDIR/config.json)"
 mkdir -p "$XDIR" /opt/var/log
@@ -112,6 +139,7 @@ TG_NETS="$TG_NETS"
 mods() { for m in ip_set ip_set_hash_ip ip_set_hash_net xt_set nf_nat_redirect xt_TPROXY; do lsmod|grep -q "^\$m " || insmod \$MD/\$m.ko 2>/dev/null; done; }
 ensure_sets() {
   ipset create \$IPSET hash:ip 2>/dev/null
+  [ -f $XDIR/vpn.ipset ] && ipset restore -! < $XDIR/vpn.ipset 2>/dev/null
   ipset create \$IPSET_TG hash:net 2>/dev/null
   for n in \$TG_NETS; do ipset add \$IPSET_TG \$n 2>/dev/null; done
 }
@@ -170,6 +198,15 @@ fi
 UPD
 chmod +x "$XDIR/update-domains.sh"
 
+# Сохранение ipset на диск (чтобы выученные IP пережили перезагрузку; restore - в fw.sh).
+cat > "$XDIR/save-ipset.sh" <<SAV
+#!/bin/sh
+# не перезаписываем сохранёнку пустым набором (защита от гонки сразу после ребута)
+[ "\$(ipset list vpn 2>/dev/null | grep -cE '^[0-9]')" -gt 0 ] || exit 0
+ipset save vpn > $XDIR/vpn.ipset.tmp 2>/dev/null && mv $XDIR/vpn.ipset.tmp $XDIR/vpn.ipset
+SAV
+chmod +x "$XDIR/save-ipset.sh"
+
 # init.d: firewall после xray (S24xray ставит пакет xray)
 cat > /opt/etc/init.d/S25xrayfw <<IEOF
 #!/bin/sh
@@ -191,8 +228,10 @@ sh $XDIR/fw.sh start
 HEOF
 chmod +x /opt/etc/ndm/netfilter.d/100-xray.sh
 
-# cron daily 05:00
-( crontab -l 2>/dev/null | grep -v update-domains; echo "0 5 * * * $XDIR/update-domains.sh >> /opt/var/log/vpn-update.log 2>&1" ) | crontab - 2>/dev/null
+# cron: обновление списка доменов (раз в сутки) + сохранение ipset (каждые 30 мин)
+( crontab -l 2>/dev/null | grep -vE "update-domains|save-ipset"; \
+  echo "0 5 * * * $XDIR/update-domains.sh >> /opt/var/log/vpn-update.log 2>&1"; \
+  echo "*/30 * * * * $XDIR/save-ipset.sh" ) | crontab - 2>/dev/null
 
 echo "==> [8/8] Запуск"
 # Восстанавливаем службы, если ранее были отключены (например, прошлым uninstall).
@@ -203,6 +242,7 @@ sed -i 's/^ENABLED=.*/ENABLED=yes/' /opt/etc/init.d/S56dnsmasq 2>/dev/null
 /opt/etc/init.d/S10cron start     >/dev/null 2>&1 || true
 sh "$XDIR/fw.sh" start >/dev/null 2>&1
 sh "$XDIR/update-domains.sh" || true
+sh "$XDIR/save-ipset.sh" 2>/dev/null || true
 
 echo
 echo "================ ГОТОВО ================"
