@@ -18,19 +18,21 @@
 
 ## Установка
 
-На роутере (SSH, root):
+На роутере (SSH, root) одной командой:
 
 ```sh
-SUB_URL="https://ваша-подписка/sub/xxxx" sh install.sh
+opkg update && opkg install curl && \
+curl -fsSL https://raw.githubusercontent.com/M2203114/vpn-keenetic/main/install.sh -o /tmp/install.sh && \
+SUB_URL="https://ваша-подписка/sub/xxxx" sh /tmp/install.sh
 ```
 
 Выбрать страну выхода (подстрока в имени сервера из подписки, по умолчанию `nl`):
 
 ```sh
-SUB_URL="https://..." EXIT=de sh install.sh
+SUB_URL="https://..." EXIT=de sh /tmp/install.sh
 ```
 
-Если на роутере нет `curl`/`wget` с HTTPS, скопируйте `install.sh` любым способом (scp, вставка через `cat > install.sh`) и запустите.
+Альтернатива (без скачивания): скопируйте `install.sh` любым способом (scp, вставка через `cat > install.sh`) и запустите `SUB_URL="..." sh install.sh`.
 
 ## Как это работает
 
