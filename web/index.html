@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VPN + zapret</title>
+<style>
+  :root{--bg:#0f1115;--card:#1a1d24;--line:#2a2f3a;--fg:#e6e8eb;--mut:#8a93a3;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#388bfd}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:760px;margin:0 auto;padding:16px}
+  h1{font-size:18px;margin:8px 0 16px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);margin:0 0 10px}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--line)}
+  .row:last-child{border:0}
+  .k{color:var(--mut)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .up{background:var(--ok)}.down{background:var(--bad)}.warn{background:var(--warn)}
+  button{background:#222733;color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:7px 12px;cursor:pointer;font-size:13px}
+  button:hover{border-color:var(--acc)}
+  button:disabled{opacity:.5;cursor:default}
+  select{background:#222733;color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:6px}
+  .full{grid-column:1/-1}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td{padding:5px 4px;border-bottom:1px solid var(--line)}
+  .mut{color:var(--mut)}
+  pre{background:#0b0d11;border:1px solid var(--line);border-radius:7px;padding:10px;overflow:auto;font-size:12px;max-height:200px;margin:8px 0 0}
+  .pill{font-size:11px;padding:2px 7px;border-radius:20px;border:1px solid var(--line)}
+  .pill.ok{color:var(--ok);border-color:#1f4427}.pill.bad{color:var(--bad);border-color:#4a1f1f}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>VPN + zapret <span id="hdr" class="mut" style="font-weight:normal;font-size:13px"></span></h1>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Службы</h2>
+      <div class="row"><span class="k">VPN (xray)</span><span id="s-xray">-</span></div>
+      <div class="row"><span class="k">Туннель (sing-box)</span><span id="s-singbox">-</span></div>
+      <div class="row"><span class="k">DNS (dnsmasq)</span><span id="s-dnsmasq">-</span></div>
+      <div class="row"><span class="k">zapret (nfqws)</span><span id="s-nfqws">-</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Туннель</h2>
+      <div class="row"><span class="k">Выход</span><span id="t-server">-</span></div>
+      <div class="row"><span class="k">IP выхода</span><span id="t-exit" class="mut">-</span></div>
+      <div class="row"><span class="k">Здоровье</span><span id="t-204">-</span></div>
+      <div class="row"><span class="k">claude / Telegram в VPN</span><span id="t-ipset" class="mut">-</span></div>
+    </div>
+
+    <div class="card">
+      <h2>zapret</h2>
+      <div class="row"><span class="k">Очередь nfqws</span><span id="z-queue">-</span></div>
+      <div class="row"><span class="k">geoip подсетей</span><span id="z-geoip" class="mut">-</span></div>
+      <div class="row" style="border:0;padding-top:8px">
+        <span class="k">Категория geoip</span>
+        <select id="geoip-sel">
+          <option value="re-filter">re-filter (реком.)</option>
+          <option value="ru-blocked">ru-blocked (полный)</option>
+          <option value="ru-blocked-community">community (мини)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Система</h2>
+      <div class="row"><span class="k">Память</span><span id="sys-mem" class="mut">-</span></div>
+      <div class="row"><span class="k">Аптайм</span><span id="sys-up" class="mut">-</span></div>
+      <div class="row" style="border:0;padding-top:8px">
+        <div class="bar">
+          <button onclick="restart('vpn')">Рестарт VPN</button>
+          <button onclick="restart('zapret')">Рестарт zapret</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card full">
+      <h2>Самотест</h2>
+      <div class="bar"><button id="bt-test" onclick="selftest()">Проверить доступ</button>
+        <span id="test-net" class="pill">сеть</span>
+        <span id="test-claude" class="pill">claude</span>
+        <span id="test-claude_com" class="pill">claude.com</span>
+        <span id="test-telegram" class="pill">telegram</span>
+      </div>
+    </div>
+
+    <div class="card full">
+      <h2>Серверы выхода (пинг)</h2>
+      <div class="bar"><button id="bt-ping" onclick="ping()">Пинговать подписку</button>
+        <span class="mut">клик по строке - выбрать сервер</span></div>
+      <table id="ping-tbl"></table>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const api=q=>fetch('cgi-bin/api.sh?'+q).then(r=>r.json());
+function dot(b){return `<span class="dot ${b?'up':'down'}"></span>${b?'работает':'стоп'}`}
+
+async function refresh(){
+  try{
+    const s=await api('action=status');
+    $('s-xray').innerHTML=dot(s.xray);
+    $('s-singbox').innerHTML=dot(s.singbox);
+    $('s-dnsmasq').innerHTML=dot(s.dnsmasq);
+    $('s-nfqws').innerHTML=dot(s.nfqws);
+    $('t-server').textContent=s.server||'-';
+    $('t-exit').textContent=s.exit_ip||'-';
+    const h=s.tunnel_204==='204';
+    $('t-204').innerHTML=`<span class="dot ${h?'up':'down'}"></span>${s.tunnel_204||'-'}`;
+    $('t-ipset').textContent=`${s.vpn_ips} / ${s.vpn_tg}`;
+    const q=+s.queue_total;
+    $('z-queue').innerHTML=`<span class="dot ${q>200?'warn':'up'}"></span>${s.queue_total}`+(q>200?' (затор!)':'');
+    $('z-geoip').textContent=`${s.geoip_count} (${s.geoip_list})`;
+    if(s.geoip_list) $('geoip-sel').value=s.geoip_list;
+    $('sys-mem').textContent=s.mem_pct+'%';
+    $('sys-up').textContent=Math.floor(s.uptime/3600)+' ч';
+    $('hdr').textContent='обновлено '+new Date().toLocaleTimeString();
+  }catch(e){ $('hdr').textContent='нет связи с роутером'; }
+}
+function pill(id,o){const e=$('test-'+id);e.className='pill '+(o&&o.ok?'ok':'bad');e.textContent=e.textContent.split(' ')[0]+' '+(o?o.code:'-');}
+async function selftest(){
+  $('bt-test').disabled=true;$('bt-test').textContent='Проверяю...';
+  try{const t=await api('action=selftest');pill('net',t.net);pill('claude',t.claude);pill('claude_com',t.claude_com);pill('telegram',t.telegram);}catch(e){}
+  $('bt-test').disabled=false;$('bt-test').textContent='Проверить доступ';
+}
+async function ping(){
+  $('bt-ping').disabled=true;$('bt-ping').textContent='Пингую...';
+  try{
+    const r=await api('action=ping');const t=$('ping-tbl');t.innerHTML='';
+    (r.servers||[]).forEach(x=>{
+      const tr=document.createElement('tr');
+      const live=x.rtt!==9999;
+      tr.innerHTML=`<td>${x.server}${x.server===r.best?' <span class="pill ok">лучший</span>':''}</td><td class="mut" style="text-align:right">${live?x.rtt+' мс':'недоступен'}</td>`;
+      if(live){tr.style.cursor='pointer';tr.onclick=()=>setRegion(x.server);}
+      t.appendChild(tr);
+    });
+  }catch(e){}
+  $('bt-ping').disabled=false;$('bt-ping').textContent='Пинговать подписку';
+}
+async function setRegion(srv){ if(!confirm('Поставить сервер выхода: '+srv+'?'))return; await api('action=set_region&server='+encodeURIComponent(srv)); setTimeout(refresh,2000); }
+async function restart(svc){ await api('action=restart&svc='+svc); setTimeout(refresh,2000); }
+$('geoip-sel').onchange=async e=>{ if(confirm('Сменить geoip на '+e.target.value+' и обновить?')) await api('action=set_geoip&list='+e.target.value); };
+
+refresh(); setInterval(refresh,10000);
+</script>
+</body>
+</html>
