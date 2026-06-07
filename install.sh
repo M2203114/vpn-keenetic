@@ -8,7 +8,8 @@
 #   EXIT_SERVER=nl02s2.pablo.support   конкретный сервер выхода (иначе - пинг и выбор лучшего)
 #   LANS="br0 br1"                     LAN-интерфейсы (по умолчанию автоопределение)
 #   NO_PANEL=1                         не ставить веб-панель
-set -e
+# best-effort: не используем set -e (рестарты служб через rc.func часто дают ненулевой код),
+# критичные проверки делаем явно.
 SUB_URL="${SUB_URL:-}"
 [ -z "$SUB_URL" ] && { echo "Задай SUB_URL: SUB_URL=\"https://.../sub/UUID\" sh install.sh"; exit 1; }
 PASS=$(printf '%s' "$SUB_URL" | sed 's#.*/##')   # пароль hysteria2 = UUID в конце ссылки (pablovpn)
@@ -195,6 +196,9 @@ restart) sh /opt/etc/xray/fw.sh start;;
 esac
 INIT
 chmod +x $OPT/init.d/S23singbox $OPT/init.d/S24xray $OPT/init.d/S25xrayfw
+rm -f $OPT/init.d/S23singbox.off $OPT/init.d/S24xray.off $OPT/init.d/S25xrayfw.off $OPT/init.d/S99vpnpanel.off
+# вернуть автозапуск dnsmasq (uninstall мог поставить ENABLED=no)
+sed -i 's/^ENABLED=.*/ENABLED=yes/' $OPT/init.d/S56dnsmasq 2>/dev/null
 
 # netfilter-хук: переустановка правил после сбросов Keenetic
 mkdir -p $OPT/ndm/netfilter.d
