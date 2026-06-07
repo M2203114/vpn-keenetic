@@ -50,6 +50,13 @@ chmod +x /opt/etc/ndm/netfilter.d/090-vpnpanel.sh
 sh /opt/etc/ndm/netfilter.d/090-vpnpanel.sh table=filter 2>/dev/null || \
   { iptables -D INPUT -i "$WAN" -p tcp --dport $PORT -j DROP 2>/dev/null; iptables -I INPUT -i "$WAN" -p tcp --dport $PORT -j DROP; }
 
+# Entware-пакет lighttpd поднимает свой S80lighttpd на :8088 с чужим докрутом - отключаем
+if [ -f /opt/etc/init.d/S80lighttpd ]; then
+  echo "[panel] отключаю дефолтный S80lighttpd (конфликт по :8088)"
+  /opt/etc/init.d/S80lighttpd stop 2>/dev/null
+  mv /opt/etc/init.d/S80lighttpd /opt/etc/init.d/S80lighttpd.off
+fi
+killall lighttpd 2>/dev/null; sleep 1
 /opt/etc/init.d/S99vpnpanel restart >/dev/null 2>&1
 LANIP=$(ip -4 addr show br0 2>/dev/null | sed -n 's#.*inet \([0-9.]*\)/.*#\1#p' | head -1)
 echo "[panel] готово: http://${LANIP:-192.168.1.1}:$PORT"
