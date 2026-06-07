@@ -1,7 +1,6 @@
 #!/bin/sh
 # Установка веб-панели: lighttpd + CGI на порту 8088, доступ только из локалки.
-# Запускается из install.sh или вручную. Идемпотентно.
-set -e
+# Запускается из install.sh или вручную. Идемпотентно. best-effort (без set -e).
 SRC=$(cd "$(dirname "$0")/.." && pwd)   # корень репо
 WWW=/opt/share/www/vpn-panel
 PANEL=/opt/etc/vpn-panel
