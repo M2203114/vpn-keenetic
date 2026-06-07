@@ -3,7 +3,8 @@ export PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin
 # Проверка покрытия домена в zapret: резолв, в каких списках, ICMP-пинг. JSON.
 # ВАЖНО: "в списке" = домен настроен на обход (hostlist-совпадение по суффиксу).
 # Реальный факт "пробивает ли DPI" с роутера проверить нельзя (трафик роутера идёт мимо nfqws).
-D=$(printf '%s' "$1" | tr -cd 'a-zA-Z0-9.-')
+# домены регистронезависимы - приводим к нижнему (списки nfqws в нижнем регистре)
+D=$(printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9.-')
 [ -z "$D" ] && { echo '{"error":"no domain"}'; exit 0; }
 
 IP=$(drill -p 5353 @127.0.0.1 "$D" 2>/dev/null | awk '/IN[ \t]+A[ \t]/{print $NF; exit}')
