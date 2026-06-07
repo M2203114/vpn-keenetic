@@ -1,89 +1,95 @@
 # vpn-keenetic
 
-Транспарентный обход блокировок на роутере Keenetic (через Entware). Заворачивает в VLESS+Reality **только заблокированные сервисы** (по списку, наполняемому через DNS), весь остальной трафик идёт напрямую на полной скорости. Работает для всей сети (провод + WiFi), на всех клиентах, без настройки на устройствах.
+Разблокировка всей сети на роутере Keenetic (Entware) для провода и WiFi, без настройки на устройствах. Правильно делит трафик по типу блокировки: VPN-туннель только для сервисов с блокировкой по IP/региону, zapret (DPI-обход) для всего остального, прямой трафик на полной скорости.
 
-## Что делает
+Подробнее об архитектуре - [ARCHITECTURE.md](ARCHITECTURE.md).
 
-- Заблокированные/замедленные в РФ сервисы (ChatGPT, Claude, Gemini, Instagram, Discord, YouTube, X и т.д. - список ~1100+ доменов от [itdoginfo](https://github.com/itdoginfo/allow-domains)) идут через ваш VLESS-сервер.
-- Telegram: сообщения, медиа и **звонки** (через статические IP-диапазоны дата-центров Telegram).
-- Всё остальное (российские сайты, Кинопоиск, проводной трафик) - напрямую, без потери скорости.
-- Список заблокированного обновляется сам раз в сутки (cron), загрузка идёт через сам VPN - источник списка нельзя заблокировать.
-- Переживает перезагрузки роутера и сбросы firewall Keenetic.
+## Как делит трафик
+
+| Тип блокировки | Механизм | Примеры |
+|---|---|---|
+| По IP/региону, выделенный диапазон | VPN-туннель (Hysteria2) | claude, Telegram (вкл. звонки) |
+| По DPI/SNI | zapret (nfqws, напрямую) | YouTube, Instagram, Discord, тысячи доменов/IP |
+| Не блокируется | напрямую | российские сайты, остальное |
+
+ChatGPT/Gemini не заворачиваются (общие CDN Cloudflare/Google, по IP не отделить) - для них нужен VPN на самом устройстве.
+
+## Состав
+
+- **VPN**: xray (перехват ipset+REDIRECT/TPROXY) + sing-box (Hysteria2-клиент).
+- **zapret**: пакет [nfqws-keenetic](https://github.com/Anonym-tsk/nfqws-keenetic) - ставится автоматически, если его нет; приносит свою стратегию desync. Наш слой сверху - geoip-список заблокированных в РФ ([runetfreedom](https://github.com/runetfreedom/russia-blocked-geoip), re-filter ~25k подсетей) с автообновлением.
+- **Веб-панель**: lighttpd + CGI на `:8088` (только из локалки).
 
 ## Требования
 
-- Роутер Keenetic с установленным **Entware** (opkg) и доступом root по SSH.
-- Подписка с VLESS+Reality сервером (ссылка на subscription).
-- Свободно ~10 МБ на разделе Entware.
+- Keenetic с **Entware** (opkg), root по SSH.
+- Подписка с Hysteria2-сервером (формат pablovpn: пароль = UUID в ссылке).
+- ~30 МБ на разделе Entware.
 
 ## Установка
-
-На роутере (SSH, root) одной командой:
 
 ```sh
 opkg update && opkg install curl && \
 curl -fsSL https://raw.githubusercontent.com/M2203114/vpn-keenetic/main/install.sh -o /tmp/install.sh && \
-SUB_URL="https://ваша-подписка/sub/xxxx" sh /tmp/install.sh
+SUB_URL="https://ваша-подписка/sub/UUID" sh /tmp/install.sh
 ```
 
-Установщик сам перебирает серверы из подписки, проверяет выход и берёт первый рабочий. Управление выбором:
+Скрипт сам пингует серверы и берёт быстрый. Опции:
 
 ```sh
-SUB_URL="https://..." EXIT=de sh /tmp/install.sh          # страна выхода (по умолчанию nl)
-SUB_URL="https://..." SERVER=nl01s2 sh /tmp/install.sh    # конкретный сервер
+SUB_URL="..." EXIT_SERVER=nl02s2.pablo.support sh install.sh   # конкретный сервер
+SUB_URL="..." NO_PANEL=1 sh install.sh                         # без веб-панели
 ```
 
-Альтернатива (без скачивания): скопируйте `install.sh` любым способом (scp, вставка через `cat > install.sh`) и запустите `SUB_URL="..." sh install.sh`.
+После установки - панель на `http://IP-роутера:8088`.
 
-## Как это работает
+## Веб-панель
 
-```
-клиент --DNS:53--> [iptables REDIRECT] --> dnsmasq:5353 --> ndnproxy (DNS Keenetic)
-                                              |
-                              домен из списка -> его IP добавляется в ipset "vpn"
-клиент --TCP--> [iptables: dst в ipset?] --да--> xray REDIRECT:12345 --> VLESS --> выход
-                                          --нет--> напрямую (аппаратное ускорение, полная скорость)
-Telegram UDP (звонки) --> [TPROXY] --> xray:12346 --> VLESS --> выход
-```
-
-- **dnsmasq** (порт 5353) перехватывает DNS клиентов, форвардит в штатный DNS Keenetic (ndnproxy), и для доменов из списка добавляет полученные IP в ipset `vpn`.
-- **iptables**: DNS клиентов заворачивается в dnsmasq; TCP к адресам из ipset - в xray (REDIRECT); UDP к диапазонам Telegram - в xray (TPROXY, для звонков).
-- **xray** (dokodemo-door) принимает завёрнутый трафик и гонит через VLESS+Reality на сервер выхода.
+- Статус служб, туннеля, выхода, geoip, памяти.
+- Самотест: claude / claude.com / Telegram / сеть через туннель.
+- Пинг серверов выхода (Hysteria2) + переключение кликом.
+- Выбор geoip-категории (re-filter / ru-blocked / community).
+- Рестарт VPN / zapret.
 
 ## Управление
 
 ```sh
-sh /opt/etc/xray/fw.sh status          # состояние правил и размер ipset
-sh /opt/etc/xray/update-domains.sh     # обновить список доменов вручную
-tail -f /opt/var/log/xray.log          # лог xray (какие соединения куда)
-curl --socks5-hostname 127.0.0.1:10808 https://ifconfig.co   # проверить IP выхода
+sh /opt/etc/xray/fw.sh status                    # состояние правил и ipset
+sh /opt/etc/nfqws/geoip-update.sh                # обновить geoip вручную
+sh /opt/etc/vpn-panel/scripts/region-ping.sh     # пинг серверов
+curl --socks5-hostname 127.0.0.1:11080 https://ifconfig.co   # IP выхода
 ```
 
-- **Добавить свой домен** сверх списка: допишите в `/opt/etc/dnsmasq.conf` строку `ipset=/ваш-домен.com/vpn` и `/opt/etc/init.d/S56dnsmasq restart`.
-- **Сменить страну выхода**: поле `address` в outbound `proxy` в `/opt/etc/xray/config.json`, затем `/opt/etc/init.d/S24xray restart`.
+- **Добавить домен в VPN** (только с выделенным IP): строка `ipset=/домен/vpn` в `/opt/etc/dnsmasq.conf`, затем `S56dnsmasq restart`.
+- **Добавить домен в zapret**: строкой в `/opt/etc/nfqws/user.list`, затем `S51nfqws restart`.
+- **Сменить регион**: панель или `region-ping.sh --apply`.
 
 ## Файлы
 
 | Путь | Назначение |
 |---|---|
-| `/opt/etc/xray/config.json` | конфиг xray (содержит креды сервера) |
-| `/opt/etc/xray/fw.sh` | правила iptables (start/stop/status) |
-| `/opt/etc/xray/update-domains.sh` | обновление списка доменов |
-| `/opt/etc/dnsmasq.conf`, `/opt/etc/dnsmasq.d/` | DNS + список доменов |
-| `/opt/etc/init.d/S24xray`, `S25xrayfw`, `S56dnsmasq` | автозапуск |
-| `/opt/etc/ndm/netfilter.d/100-xray.sh` | переустановка правил после сбросов Keenetic |
+| `/opt/etc/sing-box/config.json` | Hysteria2-клиент (сервер, пароль) |
+| `/opt/etc/xray/config.json` | xray (перехват) |
+| `/opt/etc/xray/fw.sh` | ipset + iptables (start/stop/status) |
+| `/opt/etc/xray/failover.sh` | авто-переключение сервера |
+| `/opt/etc/xray/servers.list` | серверы выхода (Hysteria2) |
+| `/opt/etc/dnsmasq.conf` | DNS + домены claude |
+| `/opt/etc/nfqws/` | zapret: стратегия, geoip, списки |
+| `/opt/share/www/vpn-panel/`, `/opt/etc/vpn-panel/` | веб-панель |
 
 ## Ограничения
 
-- Звонки Telegram едут внутри TCP-туннеля VLESS - работают, но возможна доп. задержка против прямого UDP.
-- Если приложение использует своё шифрованное DNS (DoH/DoT), его запросы идут мимо dnsmasq и в ipset не попадут - такие сервисы нужно добавлять по IP отдельно.
-- Скрипт рассчитан на VLESS+Reality (tcp, flow vision) - именно такой формат в типовых подписках.
+- Звонки Telegram идут внутри туннеля - работают, возможна доп. задержка против прямого UDP.
+- DoH/DoT на устройстве в обход роутерного DNS: домены не попадут в ipset; claude страхуется статическим диапазоном Anthropic.
+- Рассчитан на подписку с Hysteria2 (формат pablovpn). Под другой формат - правка парсинга в install.sh.
 
 ## Удаление
 
 ```sh
 sh uninstall.sh
 ```
+
+zapret (nfqws-keenetic) при удалении остаётся - убирается только наш geoip-слой и VPN.
 
 ## Лицензия
 
