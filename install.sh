@@ -218,13 +218,17 @@ SAVE
 chmod +x $OPT/xray/save-ipset.sh
 
 # ===================== zapret (nfqws-keenetic) + geoip =====================
-if [ ! -f $OPT/init.d/S51nfqws ]; then
+NFQWS_INIT=$(ls $OPT/init.d/S51nfqws $OPT/init.d/K51nfqws 2>/dev/null | head -1)
+if [ -z "$NFQWS_INIT" ]; then
   log "ставлю nfqws-keenetic (zapret)"
   echo 'src/gz nfqws-keenetic https://anonym-tsk.github.io/nfqws-keenetic/all' >> $OPT/opkg.conf 2>/dev/null || true
   opkg update >/dev/null 2>&1 || true
   opkg install nfqws-keenetic >/dev/null 2>&1 || echo "[!] nfqws-keenetic не поставился авто - см. github Anonym-tsk/nfqws-keenetic"
 else
   log "nfqws-keenetic уже стоит - использую как есть"
+  # включить, если выключен (K-префикс = disabled)
+  case "$NFQWS_INIT" in */K51nfqws) mv "$NFQWS_INIT" $OPT/init.d/S51nfqws; log "включил nfqws (был выключен)";; esac
+  /opt/etc/init.d/S51nfqws start >/dev/null 2>&1
 fi
 # geoip-обновлятор + конфиг категории
 if [ -d $OPT/nfqws ]; then
@@ -262,4 +266,4 @@ if [ -z "$NO_PANEL" ] && [ -f scripts/install-panel.sh ]; then
 fi
 
 log "готово. Статус: sh $OPT/xray/fw.sh status"
-[ -z "$NO_PANEL" ] && log "панель: http://${LAN_IPS%%,*}:8088"
+[ -z "$NO_PANEL" ] && log "панель: http://${LAN_IPS%%,*}:${PANEL_PORT:-8088}"

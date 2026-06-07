@@ -4,7 +4,7 @@
 SRC=$(cd "$(dirname "$0")/.." && pwd)   # корень репо
 WWW=/opt/share/www/vpn-panel
 PANEL=/opt/etc/vpn-panel
-PORT=8088
+PORT="${PANEL_PORT:-8088}"   # порт можно переопределить (напр. если 8088 занят nfqws-keenetic-web)
 
 echo "[panel] ставлю lighttpd + mod-cgi"
 opkg update >/dev/null 2>&1 || true
@@ -19,7 +19,7 @@ chmod +x "$WWW/cgi-bin/api.sh"
 for s in status.sh selftest.sh region-ping.sh geoip-update.sh; do
   cp "$SRC/scripts/$s" "$PANEL/scripts/$s"; chmod +x "$PANEL/scripts/$s"
 done
-cp "$SRC/web/lighttpd.conf" "$PANEL/lighttpd.conf"
+sed "s/^server.port = .*/server.port = $PORT/" "$SRC/web/lighttpd.conf" > "$PANEL/lighttpd.conf"
 
 echo "[panel] init-скрипт автозапуска"
 cat > /opt/etc/init.d/S99vpnpanel <<'INIT'
