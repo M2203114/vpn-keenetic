@@ -68,10 +68,12 @@ JSON
 cat > $OPT/xray/config.json <<'JSON'
 {
 "log": { "access": "/opt/var/log/xray.log", "loglevel": "warning" },
+"policy": { "levels": { "0": { "connIdle":3600, "handshake":10, "uplinkOnly":300, "downlinkOnly":300 } } },
 "inbounds": [
 { "tag":"redir-in","listen":"0.0.0.0","port":12345,"protocol":"dokodemo-door","settings":{"network":"tcp","followRedirect":true},"sniffing":{"enabled":false} },
 { "tag":"tproxy-udp","listen":"0.0.0.0","port":12346,"protocol":"dokodemo-door","settings":{"network":"udp","followRedirect":true},"streamSettings":{"sockopt":{"tproxy":"tproxy"}} },
-{ "tag":"socks-in","listen":"127.0.0.1","port":10808,"protocol":"socks","settings":{"udp":true} }
+{ "tag":"socks-in","listen":"127.0.0.1","port":10808,"protocol":"socks","settings":{"udp":true} },
+{ "tag":"http-in","listen":"__LANIP__","port":10809,"protocol":"http" }
 ],
 "outbounds": [
 { "tag":"proxy","protocol":"socks","settings":{"servers":[{"address":"127.0.0.1","port":11080}]},"streamSettings":{"sockopt":{"mark":255}} },
@@ -81,6 +83,9 @@ cat > $OPT/xray/config.json <<'JSON'
 "routing": { "domainStrategy":"AsIs","rules":[ {"type":"field","ip":["10.0.0.0/8","172.16.0.0/12","192.168.0.0/16","127.0.0.0/8","100.64.0.0/10","169.254.0.0/16"],"outboundTag":"direct"} ] }
 }
 JSON
+# http-in: HTTP-прокси на LAN-адрес (полный туннель для Claude Code и HTTP/2-приложений).
+# Только LAN (br0 IP), на WAN не светится. Использование: HTTPS_PROXY=http://<LAN_IP>:10809
+sed -i "s/__LANIP__/${LAN_IPS%%,*}/" $OPT/xray/config.json
 
 # ===================== firewall (ipset + iptables) =====================
 cat > $OPT/xray/fw.sh <<FW
