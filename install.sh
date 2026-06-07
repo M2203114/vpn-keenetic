@@ -69,7 +69,7 @@ cat > $OPT/xray/config.json <<'JSON'
 {
 "log": { "access": "/opt/var/log/xray.log", "loglevel": "warning" },
 "inbounds": [
-{ "tag":"redir-in","listen":"0.0.0.0","port":12345,"protocol":"dokodemo-door","settings":{"network":"tcp","followRedirect":true},"sniffing":{"enabled":true,"destOverride":["http","tls"]} },
+{ "tag":"redir-in","listen":"0.0.0.0","port":12345,"protocol":"dokodemo-door","settings":{"network":"tcp","followRedirect":true},"sniffing":{"enabled":false} },
 { "tag":"tproxy-udp","listen":"0.0.0.0","port":12346,"protocol":"dokodemo-door","settings":{"network":"udp","followRedirect":true},"streamSettings":{"sockopt":{"tproxy":"tproxy"}} },
 { "tag":"socks-in","listen":"127.0.0.1","port":10808,"protocol":"socks","settings":{"udp":true} }
 ],
