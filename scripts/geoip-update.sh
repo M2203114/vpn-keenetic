@@ -1,4 +1,5 @@
 #!/bin/sh
+export PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin
 # Обновление geoip-списков заблокированных в РФ для zapret (nfqws).
 # Тянет CIDR-списки из runetfreedom/russia-blocked-geoip через VPN-туннель
 # (github в РФ режется), валидирует и подменяет ipset-файлы nfqws, рестартит сервис.

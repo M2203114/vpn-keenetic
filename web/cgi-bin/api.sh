@@ -1,4 +1,5 @@
 #!/bin/sh
+export PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin
 # CGI-бэкенд веб-панели. Отдаёт JSON. Доступен только из локалки (lighttpd слушает LAN).
 # Действия через ?action=... :
 #   status            статус служб и туннеля

@@ -1,4 +1,5 @@
 #!/bin/sh
+export PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin
 # Пинг серверов выхода из подписки и ранжирование по задержке.
 # Использование: region-ping.sh [--apply] [--json] [SUB_URL]
 #   --apply  поставить лучший сервер в sing-box и перезапустить

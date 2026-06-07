@@ -1,4 +1,5 @@
 #!/bin/sh
+export PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin
 # Статус VPN + zapret в JSON (для веб-панели). Без jq - JSON собирается вручную.
 
 running(){ ps w 2>/dev/null | grep -v grep | grep -qE "$1"; }
