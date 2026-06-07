@@ -90,9 +90,9 @@
     </div>
 
     <div class="card full">
-      <h2>Серверы выхода (пинг)</h2>
-      <div class="bar"><button id="bt-ping" onclick="ping()">Пинговать подписку</button>
-        <span class="mut">клик по строке - выбрать сервер</span></div>
+      <h2>Серверы выхода — Hysteria2</h2>
+      <div class="bar"><button id="bt-ping" onclick="ping()">Пинговать</button>
+        <span class="mut">клик по строке - выбрать выход. "ICMP н/д" = не отвечает на пинг, но может работать</span></div>
       <table id="ping-tbl"></table>
     </div>
   </div>
@@ -137,8 +137,8 @@ async function ping(){
     (r.servers||[]).forEach(x=>{
       const tr=document.createElement('tr');
       const live=x.rtt!==9999;
-      tr.innerHTML=`<td>${x.server}${x.server===r.best?' <span class="pill ok">лучший</span>':''}</td><td class="mut" style="text-align:right">${live?x.rtt+' мс':'недоступен'}</td>`;
-      if(live){tr.style.cursor='pointer';tr.onclick=()=>setRegion(x.server);}
+      tr.innerHTML=`<td>${x.server}${x.server===r.best?' <span class="pill ok">лучший</span>':''}</td><td class="mut" style="text-align:right">${live?x.rtt+' мс':'ICMP н/д'}</td>`;
+      tr.style.cursor='pointer';tr.onclick=()=>setRegion(x.server);
       t.appendChild(tr);
     });
   }catch(e){}
