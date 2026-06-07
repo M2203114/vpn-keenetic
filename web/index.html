@@ -50,7 +50,7 @@
       <div class="row"><span class="k">Выход</span><span id="t-server">-</span></div>
       <div class="row"><span class="k">IP выхода</span><span id="t-exit" class="mut">-</span></div>
       <div class="row"><span class="k">Здоровье</span><span id="t-204">-</span></div>
-      <div class="row"><span class="k">claude / Telegram в VPN</span><span id="t-ipset" class="mut">-</span></div>
+      <div class="row"><span class="k" title="vpn: IP из claude-доменов; vpn_tg: статические подсети Telegram + диапазон Anthropic">Маршруты в туннель</span><span id="t-ipset" class="mut">-</span></div>
     </div>
 
     <div class="card">
@@ -114,7 +114,7 @@ async function refresh(){
     $('t-exit').textContent=s.exit_ip||'-';
     const h=s.tunnel_204==='204';
     $('t-204').innerHTML=`<span class="dot ${h?'up':'down'}"></span>${s.tunnel_204||'-'}`;
-    $('t-ipset').textContent=`${s.vpn_ips} / ${s.vpn_tg}`;
+    $('t-ipset').textContent=`${s.vpn_ips} IP + ${s.vpn_tg} подсетей`;
     const q=+s.queue_total;
     $('z-queue').innerHTML=`<span class="dot ${q>200?'warn':'up'}"></span>${s.queue_total}`+(q>200?' (затор!)':'');
     $('z-geoip').textContent=`${s.geoip_count} (${s.geoip_list})`;
