@@ -57,6 +57,7 @@
       <h2>zapret</h2>
       <div class="row"><span class="k">Очередь nfqws</span><span id="z-queue">-</span></div>
       <div class="row"><span class="k">geoip подсетей</span><span id="z-geoip" class="mut">-</span></div>
+      <div class="row"><span class="k">доменов в user.list</span><span id="z-user" class="mut">-</span></div>
       <div class="row" style="border:0;padding-top:8px">
         <span class="k">Категория geoip</span>
         <select id="geoip-sel">
@@ -95,6 +96,32 @@
         <span class="mut">клик по строке - выбрать выход. "ICMP н/д" = не отвечает на пинг, но может работать</span></div>
       <table id="ping-tbl"></table>
     </div>
+
+    <div class="card full">
+      <h2>zapret — проверка домена</h2>
+      <div class="bar">
+        <input id="cov-domain" placeholder="youtube.com" style="background:#222733;color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:7px;min-width:200px">
+        <button onclick="coverage()">Проверить</button>
+        <span class="mut">в списке = настроен на обход; пинг = жив ли сервер. Реальный факт обхода - только с устройства</span>
+      </div>
+      <div id="cov-res" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card full">
+      <h2>zapret — редактор</h2>
+      <div class="bar">
+        <select id="ed-file">
+          <option value="user">user.list (домены обхода)</option>
+          <option value="google">google.list</option>
+          <option value="conf">nfqws.conf (стратегия)</option>
+        </select>
+        <button onclick="loadFile()">Загрузить</button>
+        <button id="ed-save" onclick="saveFile()">Сохранить + рестарт</button>
+        <span id="ed-msg" class="mut"></span>
+      </div>
+      <textarea id="ed-area" spellcheck="false" style="width:100%;height:240px;margin-top:8px;background:#0b0d11;color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:10px;font:12px/1.4 ui-monospace,Menlo,monospace"></textarea>
+      <div class="mut">nfqws.conf - это конфиг стратегии обхода, правь осторожно (бэкап .bak сохраняется). После сохранения nfqws перезапускается.</div>
+    </div>
   </div>
 </div>
 
@@ -118,6 +145,7 @@ async function refresh(){
     const q=+s.queue_total;
     $('z-queue').innerHTML=`<span class="dot ${q>200?'warn':'up'}"></span>${s.queue_total}`+(q>200?' (затор!)':'');
     $('z-geoip').textContent=`${s.geoip_count} (${s.geoip_list})`;
+    $('z-user').textContent=s.userlist;
     if(s.geoip_list) $('geoip-sel').value=s.geoip_list;
     $('sys-mem').textContent=s.mem_pct+'%';
     $('sys-up').textContent=Math.floor(s.uptime/3600)+' ч';
@@ -147,6 +175,40 @@ async function ping(){
 async function setRegion(srv){ if(!confirm('Поставить сервер выхода: '+srv+'?'))return; await api('action=set_region&server='+encodeURIComponent(srv)); setTimeout(refresh,2000); }
 async function restart(svc){ await api('action=restart&svc='+svc); setTimeout(refresh,2000); }
 $('geoip-sel').onchange=async e=>{ if(confirm('Сменить geoip на '+e.target.value+' и обновить?')) await api('action=set_geoip&list='+e.target.value); };
+
+function yn(b){return b?'<span class="pill ok">да</span>':'<span class="pill bad">нет</span>'}
+async function coverage(){
+  const d=$('cov-domain').value.trim(); if(!d)return;
+  $('cov-res').innerHTML='<span class="mut">проверяю...</span>';
+  try{
+    const r=await api('action=coverage&domain='+encodeURIComponent(d));
+    if(r.error){$('cov-res').innerHTML='<span class="mut">ошибка: '+r.error+'</span>';return;}
+    $('cov-res').innerHTML=`<table>
+      <tr><td class="mut">домен</td><td>${r.domain}</td></tr>
+      <tr><td class="mut">IP</td><td>${r.ip||'не резолвится'}</td></tr>
+      <tr><td class="mut">в user.list</td><td>${yn(r.in_userlist)}</td></tr>
+      <tr><td class="mut">в google.list</td><td>${yn(r.in_google)}</td></tr>
+      <tr><td class="mut">в geoip (по /24)</td><td>${yn(r.in_geoip)}</td></tr>
+      <tr><td class="mut">ICMP-пинг</td><td>${r.ping_ms} мс</td></tr></table>`;
+  }catch(e){ $('cov-res').innerHTML='<span class="mut">нет связи</span>'; }
+}
+async function loadFile(){
+  const n=$('ed-file').value; $('ed-msg').textContent='загружаю...';
+  try{ const r=await api('action=getfile&name='+n); if(r.ok){$('ed-area').value=r.content;$('ed-msg').textContent='загружено';} else $('ed-msg').textContent='ошибка: '+(r.error||''); }
+  catch(e){ $('ed-msg').textContent='нет связи'; }
+}
+async function saveFile(){
+  const n=$('ed-file').value, body=$('ed-area').value;
+  if(!body.trim()){ $('ed-msg').textContent='пусто - не сохраняю'; return; }
+  if(n==='conf' && !confirm('Сохранить nfqws.conf и перезапустить zapret? Ошибка в стратегии может сломать обход.'))return;
+  $('ed-save').disabled=true; $('ed-msg').textContent='сохраняю + рестарт...';
+  try{
+    const r=await fetch('cgi-bin/api.sh?action=savefile&name='+n,{method:'POST',headers:{'Content-Type':'text/plain'},body}).then(x=>x.json());
+    $('ed-msg').textContent=r.ok?('сохранено ('+r.lines+' строк), nfqws перезапущен'):('ошибка: '+(r.error||''));
+    setTimeout(refresh,2500);
+  }catch(e){ $('ed-msg').textContent='нет связи'; }
+  $('ed-save').disabled=false;
+}
 
 refresh(); setInterval(refresh,10000);
 </script>

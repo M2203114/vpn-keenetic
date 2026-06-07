@@ -57,5 +57,38 @@ case "$ACTION" in
       if [ -n "$F" ] && [ -f "$F" ]; then
         printf '{"ok":true,"text":"'; tail -20 "$F" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n",$0}'; printf '"}\n'
       else printf '{"ok":false}\n'; fi ;;
+  coverage)
+      sh "$SCR/zapret-cov.sh" "$(qval domain)" ;;
+  getfile)
+      case "$(san "$(qval name)")" in
+        user)   F=/opt/etc/nfqws/user.list ;;
+        google) F=/opt/etc/nfqws/google.list ;;
+        conf)   F=/opt/etc/nfqws/nfqws.conf ;;
+        *) F= ;;
+      esac
+      if [ -n "$F" ] && [ -f "$F" ]; then
+        printf '{"ok":true,"content":"'
+        sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g' "$F" | awk '{printf "%s\\n",$0}'
+        printf '"}\n'
+      else printf '{"ok":false,"error":"no file"}\n'; fi ;;
+  savefile)
+      case "$(san "$(qval name)")" in
+        user)   F=/opt/etc/nfqws/user.list ;;
+        google) F=/opt/etc/nfqws/google.list ;;
+        conf)   F=/opt/etc/nfqws/nfqws.conf ;;
+        *) F= ;;
+      esac
+      if [ -n "$F" ]; then
+        LEN="${CONTENT_LENGTH:-0}"
+        head -c "$LEN" > /tmp/_save.$$ 2>/dev/null
+        if [ -s /tmp/_save.$$ ]; then
+          cp "$F" "$F.bak" 2>/dev/null
+          mv /tmp/_save.$$ "$F"
+          /opt/etc/init.d/S51nfqws restart >/dev/null 2>&1
+          printf '{"ok":true,"lines":%s}\n' "$(wc -l < "$F" 2>/dev/null)"
+        else
+          rm -f /tmp/_save.$$; printf '{"ok":false,"error":"empty body"}\n'
+        fi
+      else printf '{"ok":false,"error":"bad name"}\n'; fi ;;
   *) printf '{"error":"unknown action"}\n' ;;
 esac

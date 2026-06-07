@@ -20,6 +20,7 @@ EXIP=$(curl -s --max-time 6 --socks5-hostname 127.0.0.1:11080 https://ifconfig.c
 QTOTAL=$(awk '$1==200{print $3}' /proc/net/netfilter/nfnetlink_queue 2>/dev/null | head -1)
 GEOIP=$(grep -cE '^[0-9]' /opt/etc/nfqws/ipset.list 2>/dev/null)
 GEOIP_LIST=re-filter; [ -f /opt/etc/nfqws/geoip.conf ] && . /opt/etc/nfqws/geoip.conf 2>/dev/null
+USERLIST=$(grep -cvE '^[[:space:]]*(#|$)' /opt/etc/nfqws/user.list 2>/dev/null)
 
 VPN_IPS=$(ipset list vpn 2>/dev/null | grep -cE '^[0-9]')
 VPN_TG=$(ipset list vpn_tg 2>/dev/null | grep -cE '^[0-9]')
@@ -30,7 +31,7 @@ MEM=$(awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{if(t)printf "%d", (t-a)*100/t
 printf '{'
 printf '"xray":%s,"singbox":%s,"dnsmasq":%s,"nfqws":%s,' "$XRAY" "$SINGBOX" "$DNSMASQ" "$NFQWS"
 printf '"server":"%s","tunnel_204":"%s","exit_ip":"%s",' "$SERVER" "$T204" "$EXIP"
-printf '"queue_total":%s,"geoip_count":%s,"geoip_list":"%s",' "${QTOTAL:-0}" "${GEOIP:-0}" "$GEOIP_LIST"
+printf '"queue_total":%s,"geoip_count":%s,"geoip_list":"%s","userlist":%s,' "${QTOTAL:-0}" "${GEOIP:-0}" "$GEOIP_LIST" "${USERLIST:-0}"
 printf '"vpn_ips":%s,"vpn_tg":%s,' "${VPN_IPS:-0}" "${VPN_TG:-0}"
 printf '"uptime":%s,"mem_pct":%s' "${UPTIME:-0}" "${MEM:-0}"
 printf '}\n'
