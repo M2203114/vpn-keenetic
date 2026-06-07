@@ -248,6 +248,13 @@ $OPT/init.d/S24xray restart >/dev/null 2>&1
 sh $OPT/xray/fw.sh start >/dev/null 2>&1
 [ -x $OPT/nfqws/geoip-update.sh ] && sh $OPT/nfqws/geoip-update.sh >/dev/null 2>&1 &
 
+# выбор сервера по пингу не проверяет, жив ли Hysteria2 - проверяем туннель и при провале перебираем
+sleep 2
+if [ "$(curl -s --max-time 8 --socks5-hostname 127.0.0.1:11080 -o /dev/null -w '%{http_code}' https://www.gstatic.com/generate_204 2>/dev/null)" != "204" ]; then
+  log "сервер $SERVER не поднял туннель - перебираю рабочий (failover)"
+  sh $OPT/xray/failover.sh
+fi
+
 # ===================== веб-панель =====================
 if [ -z "$NO_PANEL" ] && [ -f scripts/install-panel.sh ]; then
   log "ставлю веб-панель"
