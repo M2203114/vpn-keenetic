@@ -16,15 +16,24 @@ while :; do
     *) break;;
   esac
 done
+SRVLIST=/opt/etc/xray/servers.list
 SUB_URL="$1"
 [ -z "$SUB_URL" ] && [ -f "$CONF" ] && . "$CONF"
-[ -z "$SUB_URL" ] && { echo '{"error":"no SUB_URL"}'; exit 1; }
 
-SUB=$(curl -fsSL --max-time 30 "$SUB_URL" 2>/dev/null)
-[ -z "$SUB" ] && { echo '{"error":"subscription fetch failed"}'; exit 1; }
-
-SERVERS=$(printf '%s' "$SUB" | grep -oE '"server"[ ]*:[ ]*"[^"]+"' | sed 's/.*"\([^"]*\)"$/\1/' | grep -E '\.' | sort -u)
-[ -z "$SERVERS" ] && { echo '{"error":"no servers in subscription"}'; exit 1; }
+# источник серверов: сперва файл servers.list (надёжно), иначе парсим подписку.
+# Подписка pablovpn отдаёт xray-конфиг (ключ "address") и лочит частые запросы,
+# поэтому статический список предпочтительнее.
+if [ -s "$SRVLIST" ]; then
+  SERVERS=$(grep -vE '^[[:space:]]*#' "$SRVLIST" | grep -oE '[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' | sort -u)
+else
+  [ -z "$SUB_URL" ] && { echo '{"error":"no servers.list and no SUB_URL"}'; exit 1; }
+  SUB=$(curl -fsSL --max-time 30 "$SUB_URL" 2>/dev/null)
+  [ -z "$SUB" ] && { echo '{"error":"subscription fetch failed"}'; exit 1; }
+  # оба ключа: "server" (sing-box/hysteria2) и "address" (xray vnext); только хостнеймы, без IP
+  SERVERS=$(printf '%s' "$SUB" | grep -oE '"(server|address)"[ ]*:[ ]*"[^"]+"' \
+    | sed 's/.*"\([^"]*\)"$/\1/' | grep -E '^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$' | sort -u)
+fi
+[ -z "$SERVERS" ] && { echo '{"error":"no servers"}'; exit 1; }
 
 # avg RTT по ICMP; недоступные = 9999
 rank=$(for s in $SERVERS; do
